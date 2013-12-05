@@ -401,3 +401,12 @@ Gossipmonger.prototype.update = function update (key, value) {
 
     self.localPeer.updateLocal(key, value);
 };
+
+Gossipmonger.prototype.stop = function stop () {
+	var self = this;
+
+	if (self.timeout) {
+		clearTimeout(self.timeout);
+		self.timeout = null;
+	}
+};
