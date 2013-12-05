@@ -169,7 +169,7 @@ var Gossipmonger = module.exports = function Gossipmonger (peerInfo, options) {
         // generate deltas to send to peer
         var candidateDeltas = [];
         digest.forEach(function (peer) {
-            
+
             // first check if the peer is the local node
             if (peer.id == self.localPeer.id) {
                 if (self.localPeer.maxVersionSeen > peer.maxVersionSeen) {
@@ -185,7 +185,7 @@ var Gossipmonger = module.exports = function Gossipmonger (peerInfo, options) {
             }
 
             var p = self.storage.get(peer.id);
-            
+
             if (!p) {
                 // add previously unknown peer to our awareness
                 peer.maxVersionSeen = 0;
@@ -221,7 +221,7 @@ var Gossipmonger = module.exports = function Gossipmonger (peerInfo, options) {
                 break;
 
             var candidate = candidateDeltas[i];
-            
+
             // sort deltas by verison number
             // this results in us sending information about the oldest changes
             // prior to the newest changes (although only the most recent change
@@ -293,35 +293,18 @@ Gossipmonger.prototype.gossip = function gossip () {
     var livePeers = self.storage.livePeers();
     var digestToSend = self.digest(livePeers);
     if (livePeers.length > 0) {
-        // select random live peer
-        var livePeer = livePeers[Math.floor(Math.random() * livePeers.length)];
-        self.emit('digest send', livePeer, digestToSend);
-        self.transport.digest(livePeer, self.localPeer, digestToSend);
+        self.gossipToLivePeers(digestToSend, livePeers);
     }
 
     // maybe try to gossip with a dead peer
     var deadPeers = self.storage.deadPeers();
-    var probability = deadPeers.length / (livePeers.length + 1);
-
-    // do not go gently into that good night, gossip if no live peers seen!
-    if (livePeers.length == 0)
-        probability = 1;
-
-    if (Math.random() < probability && deadPeers.length > 0) {
-        // select random dead peer
-        var deadPeer = deadPeers[Math.floor(Math.random() * deadPeers.length)];
-        self.emit('digest send', deadPeer, digestToSend);
-        self.transport.digest(deadPeer, self.localPeer, digestToSend);
+    if (deadPeers.length > 0) {
+        self.gossipToDeadPeers(digestToSend, livePeers, deadPeers);
     }
 
     // gossip to a seed if live peers are getting scarce
-    if (livePeers.length < self.MINIMUM_LIVE_PEERS && self.seeds.length > 0) {
-        // select random seed
-        var seed = self.seeds[Math.floor(Math.random() * self.seeds.length)];
-        if (seed.id != self.localPeer.id) {
-            self.emit('digest send', seed, digestToSend);
-            self.transport.digest(seed, self.localPeer, digestToSend);
-        }
+    if (self.seeds.length > 0) {
+        self.gossipToSeeds(digestToSend, livePeers, self.seeds);
     }
 
     // update peer liveness
@@ -348,6 +331,65 @@ Gossipmonger.prototype.gossip = function gossip () {
 
     // go another round
     self.timeout = setTimeout(self.gossip.bind(self), self.GOSSIP_INTERVAL);
+};
+
+/**
+ * Override this to change the default policy for number and choice
+ * of live peers to gossip to
+ * @param digestToSend
+ * @param livePeers
+ */
+Gossipmonger.prototype.gossipToLivePeers = function(digestToSend, livePeers) {
+    var self = this;
+
+    // select random live peer
+    var livePeer = livePeers[Math.floor(Math.random() * livePeers.length)];
+    self.emit('digest send', livePeer, digestToSend);
+    self.transport.digest(livePeer, self.localPeer, digestToSend);
+};
+
+/**
+ * Override this to change the default policy for number and choice
+ * of dead peers to gossip to
+ * @param digestToSend
+ * @param livePeers
+ * @param deadPeers
+ */
+Gossipmonger.prototype.gossipToDeadPeers = function(digestToSend, livePeers, deadPeers) {
+    var self = this;
+
+    var probability = deadPeers.length / (livePeers.length + 1);
+
+    // do not go gently into that good night, gossip if no live peers seen!
+    if (livePeers.length == 0)
+        probability = 1;
+
+    if (Math.random() < probability && deadPeers.length > 0) {
+        // select random dead peer
+        var deadPeer = deadPeers[Math.floor(Math.random() * deadPeers.length)];
+        self.emit('digest send', deadPeer, digestToSend);
+        self.transport.digest(deadPeer, self.localPeer, digestToSend);
+    }
+};
+
+/**
+ * Override this to change the default policy for number and choice
+ * of seeds to gossip to
+ * @param digestToSend
+ * @param livePeers
+ * @param seeds
+ */
+Gossipmonger.prototype.gossipToSeeds = function(digestToSend, livePeers, seeds) {
+    var self = this;
+
+    if (livePeers.length < self.MINIMUM_LIVE_PEERS && self.seeds.length > 0) {
+        // select random seed
+        var seed = self.seeds[Math.floor(Math.random() * self.seeds.length)];
+        if (seed.id != self.localPeer.id) {
+            self.emit('digest send', seed, digestToSend);
+            self.transport.digest(seed, self.localPeer, digestToSend);
+        }
+    }
 };
 
 /*
