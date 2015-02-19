@@ -136,6 +136,7 @@ var Gossipmonger = module.exports = function Gossipmonger (peerInfo, options) {
 
             // update storage if key was updated
             if (key) {                
+                self.emit('preupdate', p.id, delta[0], delta[1]);
                 self.storage.put(p.id, p);
                 // delta: [key, value, version]
                 self.emit('update', p.id, delta[0], delta[1]);
