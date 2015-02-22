@@ -168,23 +168,31 @@ var Gossipmonger = module.exports = function Gossipmonger (peerInfo, options) {
         self.storage.put(remote.id, remote);
 
         // generate deltas to send to peer
-        var candidateDeltas = [];
+        var candidateDeltas = [],
+			localPeer = self.localPeer,
+			localId = localPeer.id,
+			localTransport = localPeer.transport;
+
         digest.forEach(function (peer) {
 
             // first check if the peer is the local node
-            if (peer.id == self.localPeer.id) {
-                if (self.localPeer.maxVersionSeen > peer.maxVersionSeen) {
+            if (peer.id == localId) {
+                if (localPeer.maxVersionSeen > peer.maxVersionSeen) {
                     candidateDeltas.push({
                         peer: {
-                            id: self.localPeer.id
+                            id: localId
                         },
-                        deltas: self.localPeer.deltasAfterVersion(peer.maxVersionSeen)
+                        deltas: localPeer.deltasAfterVersion(peer.maxVersionSeen)
                     });
                 }
 
                 return;
             }
 
+			// check that this isn't a ghost peer previously on this address
+			if(peer.transport.host == localTransport.host && peer.transport.port == localTransport.port) {
+				return;
+			}
             var p = self.storage.get(peer.id);
 
             if (!p) {
